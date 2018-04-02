@@ -95,14 +95,150 @@ thrush.df <- read.csv("thrush.df.csv", colClasses = colClassesThrush)
 # Clean up the workspace
 rm(mercury, mercury0416, mercury9303, thrush)
 
-# We need to create two mercury deposition variables: a mean value for the 
-# past 6 months
+# We need to create two mercury deposition variables: a mean value for Dec previous year - May current year
+# This is just a way to create a date that can be used to calculate means for 6 months + 1 year prior:
+thrush.df$mercuryDate <- paste("5","31",year(thrush.df$date), sep = "-")
+thrush.df$mercuryDate <- as.Date(thrush.df$mercuryDate, format = "%m-%e-%Y")
+thrush.df$year <- year(thrush.df$date)
+thrush.df$jdate <- yday(thrush.df$date) # Creating a "day of the year" variable
+
 for(i in 1:nrow(thrush.df)){
-  thrush.df$hgDep6MO[i] <- mean(mercury.df$hgDepositionUGM2[which(mercury.df$date >= thrush.df$date[i]-180 & mercury.df$date <= thrush.df$date[i])], na.rm=T)
+  thrush.df$hgDep6MO[i] <- mean(mercury.df$hgDepositionUGM2[which(mercury.df$date >= thrush.df$mercuryDate[i]-180 & mercury.df$date <= thrush.df$mercuryDate[i])], na.rm=T)
 }
 
-# and for the past 2 months:
+# and for the Jun 1 previous year - May 31 current year :
 for(i in 1:nrow(thrush.df)){
-  thrush.df$hgDep2MO[i] <- mean(mercury.df$hgDepositionUGM2[which(mercury.df$date >= thrush.df$date[i]-60 & mercury.df$date <= thrush.df$date[i])], na.rm=T)
+  thrush.df$hgDep1Yr[i] <- mean(mercury.df$hgDepositionUGM2[which(mercury.df$date >= thrush.df$mercuryDate[i]-365 & mercury.df$date <= thrush.df$mercuryDate[i])], na.rm=T)
 }
 
+# In looking at the data, we have missing values for blood mercury:
+summary(thrush.df)
+# get rid of those:
+thrush.df <- thrush.df[!is.na(thrush.df$hgLevel),]
+
+# Exploratory analysis
+## Looking at the mercury date, looks to have been a modest gain over time in deposition.
+ggplot(mercury.df, aes(x = date, y = hgDepositionUGM2)) + geom_smooth() + geom_point(alpha = 0.1) + 
+  coord_trans(y = "sqrt") + ylab("Mercury deposition (micrograms per square meter") + xlab("Date")
+
+## But how much of this is due to different data sets? No obvious changes in the variability of estimates.
+mercury.df %>%
+  group_by(filename) %>%
+  ggplot(., aes(x = filename, y = hgDepositionUGM2)) + geom_boxplot() + coord_trans(y = "sqrt") + 
+  xlab(NULL) + ylab("Mercury deposition\n(micrograms per square meter)") + theme(axis.text.x = element_text(angle = 340,
+                                                                                                           vjust = 0.5))
+
+## Sample sizes over time:
+thrush.df %>%
+  group_by(year, species)%>%
+  summarize(count = n_distinct(bandNum)) %>%
+  ggplot(., aes(x = year, y = count)) + geom_col() + facet_wrap(~species) + 
+  xlab("Year") + ylab("Number of unqiue individuals sampled") + geom_text(aes(label = count, vjust = -0.5), size = 3)
+
+## Further break this down by sex:
+thrush.df %>%
+  group_by(year, species, sex)%>%
+  summarize(count = n_distinct(bandNum)) %>%
+  ggplot(., aes(x = year, y = count,fill = sex)) + geom_col() + facet_wrap(~species) + 
+  xlab("Year") + ylab("Number of unqiue individuals sampled") + geom_text(aes(label = count),
+                                                                          position = position_stack(0.9),
+                                                                          size = 3)
+
+## Overall,  by sex. For Swainson's Thrush, separating by sex isn't possible.
+thrush.df %>%
+  group_by(species, sex)%>%
+  summarize(count = n_distinct(bandNum)) %>%
+  ggplot(., aes(x = sex, y = count)) + geom_col() + facet_wrap(~species) + 
+  xlab("Sex") + ylab("Number of unqiue individuals sampled") + geom_text(aes(label = count, vjust = -0.5),
+                                                                          size = 3)
+
+## Compare roughly among sexes.
+## Male BITH (sex = 4) tend to have higher mercury levels and to exhibit greater variability in 
+## mercury levels than females. 
+ggplot(thrush.df, aes(x = sex, y = hgLevel)) + geom_boxplot() + facet_wrap(~species)
+
+## Does body mass affect Hg?
+thrush.df %>%
+  group_by(species,bandNum) %>%
+  summarize(meanHg = mean(hgLevel), meanMass = mean(wt)) %>%
+  ggplot(., aes(x = meanMass, y = meanHg)) + geom_smooth() + geom_point() + facet_wrap(~species)
+
+## A SWTH with wt = 68 g is obiously a mistake. Filter that to show that mass and mercury aren't associated:
+thrush.df %>%
+  filter(wt < 68) %>%
+  group_by(species,bandNum) %>%
+  summarize(meanHg = mean(hgLevel), meanMass = mean(wt)) %>%
+  ggplot(., aes(x = meanMass, y = meanHg)) + geom_smooth() + geom_point(alpha = 0.25) + facet_wrap(~species) + 
+  xlab("Mass (g)") + ylab("Mercury level")
+
+## Change over day-of-the year shows a general decline in mercury over the course of the year:
+## For BITH
+thrush.df %>%
+  filter(species == "BITH") %>%
+  ggplot(., aes(x = yday(date), y = hgLevel)) + geom_smooth() + geom_point(alpha = 0.25) + facet_wrap(~year) + 
+  xlab("Day of the year") + ylab("Mercury level") + ggtitle("Bicknell's Thrush mercury levels decrease\nover the year")
+
+## And SWTH:
+thrush.df %>%
+  filter(species == "SWTH") %>%
+  ggplot(., aes(x = yday(date), y = hgLevel)) + geom_smooth() + geom_point(alpha = 0.25) + facet_wrap(~year) + 
+  xlab("Day of the year") + ylab("Mercury level") + ggtitle("Swainson's Thrush mercury levels\ndecrease over the year")
+
+# Models.
+## response variable = hgLevels.
+## fixed effects: species, year, day-of-year, sex, hgDep1Yr, hgDep6mo
+## random effects: individual (bandNum)
+
+### Using the Lasso approach seems favored when considering variable selection.
+#### 
+#library(glmmLasso)
+# scale and center all metric variables so that the starting values with glmmPQL are correct
+thrush.df$yearSc <- scale(thrush.df$year, center = T, scale = T)
+thrush.df$jdateSc <- scale(thrush.df$jdate, center = T, scale = T)
+thrush.df$hgDep1YrSc <- scale(thrush.df$hgDep1Yr, center = T, scale = T)
+thrush.df$hgDep6MOSc <- scale(thrush.df$hgDep6MO, center = T, scale = T)
+
+lambda <- seq(500,0,by=-5)
+library(MASS)
+library(nlme)
+PQL <- glmmPQL(hgLevel~1, random = ~1|bandNum, family = gaussian, data = thrush.df)
+Delta.start <- c(as.numeric(PQL$coef$fixed, rep(0,6), as.numeric(t(PQL$coef$random$bandNum))))
+Q.start <- as.numeric(VarCorr(PQL)[1,1])
+
+for(j in 1:length(lambda)) {
+  print(paste("Iteration ", j, sep = ""))
+  glm1 <- try(glmmLasso(hgLevel ~ yearSc + jdateSc + hgDep1YrSc + hgDep6MOSc + as.factor(age) + 
+                          as.factor(sex) + as.factor(species), rnd = list(bandNum=~1),
+                        data = thrush.df, lambda = lambda[j], switch.NR = T,
+                        final.re = TRUE, control = list(start = Delta.start, q_start = Q.start)), silent = FALSE)
+  if(class(glm1) != "try-error")
+  {
+    BIC_vec[j] <- glm1$bic
+  }
+}
+
+opt<-which.min(BIC_vec)
+
+glm1_final <- glmmLasso(hgLevel ~ yearSc + jdateSc + hgDep1YrSc + hgDep6MOSc + as.factor(age) + 
+                          as.factor(sex) + as.factor(species), rnd = list(bandNum=~1),
+                        family = gaussian, data = thrush.df, lambda = lambda[opt], switch.NR = F, 
+                        final.re = TRUE, control = list(start = Delta.start, q_start = Q.start))
+
+#lambda 100: bic = 132.9129
+#lambda 50: bic = 132.9129
+#lambda 40: bic = 132.9129
+#lambda 20: bic = 132.9129
+#lambda 10: bic = 132.9129
+#lambda 5: bic = 97.50503
+#lambda 4: bic = 174.3837
+#lambda 3: bic = 195.695
+#lambda 2: bic = 137.1042
+#lambda 1.5: bic = 121.9519
+#lambda 1.1: bic = 120.1637
+#lambda 1: bic = 57.78632
+#lambda 0.9: bic = 63.66986
+
+glm1_final <- glmmLasso(hgLevel ~ jdate + year, rnd = list(bandNum = ~1),
+                        data = thrush.df, lambda = 100)
+summary(glm1_final)
+glm1_final$bic

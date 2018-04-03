@@ -1,0 +1,30 @@
+---
+title: "Pattenrns of variation in blood mercury levels in <i>Catharus bicknelli</i> and <i>C</i>. <i>ustulatus</i> on Mount Mansfield, Vermont"
+output: html_document
+bibliography: bibliography.bib
+csl: ecotoxicology.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Methods
+
+We analyzed variation in blood mercury levels using mixed-effects models as implemented in R version 3.4.4 [@RCoreTeam2018] in the package <i>lme4</i>[@BatesEtAl2015], version 1.1-15. In brief, we used a model-selection approach [@Burnham2003] to identify the best-supported model from a candidate set of models that reflected alternative hypotheses about sources of variation in blood mercury among <i>Catharus</i> thrushes captured on Mount Mansfield, Vermont between 2000 and 2017.
+
+Construction of the set of candidate models was informed by previous research on mercury loads among Bicknell's Thrush [@Rimmer2005,@Rimmer2010].
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

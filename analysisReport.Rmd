@@ -1,0 +1,92 @@
+---
+title: "Pattenrns of variation in blood mercury levels in <i>Catharus bicknelli</i> and <i>C</i>. <i>ustulatus</i> on Mount Mansfield, Vermont"
+output: html_document
+bibliography: bibliography.bib
+csl: ecotoxicology.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Methods
+
+We analyzed variation in blood mercury levels using mixed-effects models as implemented in R version 3.4.4 [@RCoreTeam2018] in the package <i>lme4</i>[@BatesEtAl2015], version 1.1-15. In brief, we used a model-selection approach [@Burnham2003] to identify the best-supported model from a candidate set of models that reflected alternative hypotheses about sources of variation in blood mercury among <i>Catharus</i> thrushes captured on Mount Mansfield, Vermont between 2000 and 2017. We used Akaike's Information Criteria, corrected for small-sample size (AICc), as the measure of support for each model. We used the number of unique individuals included in the analysis as the sample size for the purposes of calculating AICc. 
+
+Construction of the set of candidate models was informed by previous research on mercury loads in Bicknell's Thrush [@Rimmer2005,@Rimmer2010]. This work demonstrated consistent seasonal declines in mercury levels and inconsistent effects of age and sex; Rimmer et al. [-@Rimmer2005] found that males and older individuals had higher concentrations of mercury in their blood, whereas Rimmer et al. [-@Rimmer2010] found no effect of age or sex on blood-mercury concentration. Given the the apparent generality of the seasonal decline in concentrations of mercury on the blood, we included an effect of day-of-the-year in all models. Thus, the simplest model in our candidate set (excluding the intercept-only null model) included only an effect of sampling date. Rimmer et al. [-@Rimmer2010] suggested that mercury levels in Bicknell's Thrush declined more rapidly earlier in the year, so our next model included a quadratic effect of sampling date. To examine the possibility of age- and sex-related differences in blood-mercury concentrations, we added terms for sex and age (coded as hatch-year, second-year, or after-second-year) to the better-supported of the two date-only models. 
+
+We next considered a model that allowed for variation in blood-mercury concentration between Bicknell's Thrush and Swainson's Thrush by adding a term for species to the best-supported model. Finally, we tested for potential effects of annual variation in atmospheric deposition of mercury at our study site - previous results [@Rimmer2010] suggest that individuals continue to accumulate mercury during the breeding season - by considering models that included effects of mercurcy deposition during the preceding December - June or during the preceding 1, 2, or 3 years. We included models with a range of lagged effects of mercury deposition because the rate of mercurcy cycling in montane terrestrial systems is largely unquantified. 
+
+For all of the above models, we included individual as a random effect to account for the repeated sampling of some individuals, both within and among years. We used the best-supported model to generate inference. We generated unconditional predictions from the best model and calculated confidence intervals around predictions using the bootstrap approach implemented in the 'bootMer' function of lme4 [@BatesEtAl2015].
+
+## Results
+### Descriptive statistics
+```{r, echo=FALSE, warning=FALSE,message=FALSE}
+library(dplyr)
+library(tidyr)
+library(knitr)
+colClassesThrush <- as.vector(c("factor","character","factor","factor","factor","numeric","factor",
+                                "factor","factor","numeric","numeric","factor","factor","factor",
+                                "factor","numeric","numeric","factor"))
+thrush.df <- read.csv("thrush.df.csv", colClasses = colClassesThrush)
+thrush.df$date <- as.Date(thrush.df$date, format = "%Y-%m-%e")
+table1 <- thrush.df %>%
+  group_by(species, ageCat, sexCat) %>%
+  summarize(meanHg = mean(hgLevel, na.rm = TRUE),
+            sd = sd(hgLevel, na.rm =TRUE),
+            n = n()) %>%
+  mutate(se = sd/sqrt(n),
+         lower.ci  = meanHg - qt(1-(0.05/2), n-1)*se,
+         upper.ci = meanHg + qt(1-(0.05/2), n-1)*se)
+colnames(table1) <- c("Species", "Age", "Sex", "Mean blood mercury concentration", 
+                      "Standard deviation", "n",
+                      "Standard error", "Lower 95% confidence limit", 
+                      "Upper 95% confidence limit")
+kable(table1, digits = 3, caption = "Table 1. Blood-mercury concentrations in Bicknell's Thrush (BITH)
+      and Swainson's Thrush (SWTH) sampled on Mount Mansfield, Vermont 2000-2017.")
+
+table2 <- thrush.df %>%
+  group_by(species, ageCat) %>%
+  summarize(meanHg = mean(hgLevel, na.rm = TRUE),
+            sd = sd(hgLevel, na.rm =TRUE),
+            n = n()) %>%
+  mutate(se = sd/sqrt(n),
+         lower.ci  = meanHg - qt(1-(0.05/2), n-1)*se,
+         upper.ci = meanHg + qt(1-(0.05/2), n-1)*se)
+colnames(table2) <- c("Species", "Age", "Mean blood mercury concentration", 
+                      "Standard deviation", "n",
+                      "Standard error", "Lower 95% confidence limit", 
+                      "Upper 95% confidence limit")
+kable(table2, digits = 3, caption = "Table 2. Older Bicknell's Thrush (BITH)
+      and Swainson's Thrush (SWTH) sampled on Mount Mansfield, Vermont between 2000 and 2017 tended to have higher blood-mercury concentrations than younger individuals.")
+
+table3 <- thrush.df %>%
+  group_by(species, sexCat) %>%
+  summarize(meanHg = mean(hgLevel, na.rm = TRUE),
+            sd = sd(hgLevel, na.rm =TRUE),
+            n = n()) %>%
+  mutate(se = sd/sqrt(n),
+         lower.ci  = meanHg - qt(1-(0.05/2), n-1)*se,
+         upper.ci = meanHg + qt(1-(0.05/2), n-1)*se)
+colnames(table3) <- c("Species", "Sex", "Mean blood mercury concentration", 
+                      "Standard deviation", "n",
+                      "Standard error", "Lower 95% confidence limit", 
+                      "Upper 95% confidence limit")
+kable(table3, digits = 3, caption = "Table 3. Male Bicknell's Thrush (BITH)
+      sampled on Mount Mansfield, Vermont between 2000 and 2017 tended to have higher blood-mercury concentrations than females. Male and female Swainson's Thrush (SWTH) did not differ appreciably in blood-mercury concentration.")
+```
+
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

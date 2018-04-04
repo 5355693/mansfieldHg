@@ -161,6 +161,63 @@ mercury.df %>%
   ggplot(., aes(x = filename, y = hgDepositionUGM2)) + geom_boxplot() + coord_trans(y = "sqrt") + 
   xlab(NULL) + ylab("Mercury deposition\n(micrograms per square meter)") + theme(axis.text.x = element_text(angle = 340,
                                                                                                            vjust = 0.5))
+## Analyze the temporal variation in mercury:
+library(mgcv)
+library(viridis)
+mercury.df$doy <- yday(mercury.df$date)
+mercury.df$year <- year(mercury.df$date)
+colnames(mercury.df)[6] <- "YEAR"
+write.csv(mercury.df, "mercury.df.csv", row.names = F)
+colClassesMercury <- as.vector(c("factor","Date","numeric","factor",
+                                 "numeric","numeric","numeric"))
+tmdf <- read.csv("mercury.df.csv", colClasses = colClassesMercury)
+
+knots <- list(doy = c(0.5,366.5)) # set the endpoints of the annual cycle (with some leap years)
+
+gam.m1 <- bam(hgDepositionUGM2 ~ s(doy, k = 30, bs = "cc") + s(YEAR, k = 24) + 
+                ti(doy, YEAR, bs = c("cc","tp"), k = c(15,15)), data = mercury.df, 
+              method = "fREML", knots = knots, discrete = TRUE)
+summary(gam.m1)
+
+gam.m2 <- bam(hgDepositionUGM2 ~ s(doy, k = 30, bs = "cc") + s(YEAR, k = 24),
+              data = mercury.df, 
+              method = "fREML", knots = knots, discrete = TRUE)
+summary(gam.m2)
+AIC(gam.m1,gam.m2) # delta AIC for the simpler model is ~6, so prefer the more complex model that 
+# allows for an interaction between year*day-of-year (i.e., seasonal patterns of deposition vary over time)
+gam.check(gam.m1)
+plot(gam.m1, pages = 1, scheme = 2, shade = TRUE)
+
+library(itsadug)
+library(xtable)
+gamtabs(gam.m1, caption = "Summary of generalized additive model", type = "html")
+
+mercury.preds <- data.frame(predicted = gam.m1$fitted.values,
+                            observed = gam.m1$model$hgDepositionUGM2,
+                            year = gam.m1$model$YEAR,
+                            date = gam.m1$model$doy)
+
+mercury.preds <- gather(data = mercury.preds,key = group, value = measurement,1:2)
+ggplot(data = mercury.preds, aes(x = date, y = measurement, group = group, color = group)) + 
+  geom_point()
+
+mercury.df$predicted <- gam.m1$fitted.values
+ggplot(mercury.df, aes(x = doy, y = predicted)) + geom_line() + 
+  geom_line(aes(x = doy, y = hgDepositionUGM2, color = "red", alpha = 0.2)) + coord_trans(y = "sqrt") + 
+  facet_wrap(~YEAR)
+
+#GAM plots, with values shifted by the value of the intercept to make
+#the y-axis more interpretable.
+par(mfrow = c(1,2), mgp = c(1.5,0.5,0))
+plot(gam.m1, select = 2, shade = T, shift = 0.100684, xlab = "Year", 
+     ylab = expression("Expected mercury concentration" ~ (mu ~ grams ~ m^{-2})))
+text(2015,0.18,"A")
+plot(gam.m1, rug = F, select = 1, shade = T, shift = 0.100684, xlab = "Day of the year", 
+     ylab = expression("Expected mercury concentration" ~ (mu ~ grams ~ m^{-2})))
+text(358,0.18,"B")
+
+vis.gam(gam.m1,plot.type="contour",color="terrain", main="", xlab = "Day of the year",
+        ylab = "Year")
 
 ## Sample sizes over time:
 thrush.df %>%
@@ -439,6 +496,16 @@ abline(0,1)
 
 ## Parameter estimates from the best model:
 confint(Cand.models[[4]], level = 0.95, method = "profile")
+library(lmerTest)
+best.mod <- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + (1|bandNum), REML = FALSE, data = thrush.df)
+anova(best.mod)
+summary(best.mod)
+
+theta <- getME(Cand.models[[4]],"theta")
+## diagonal elements are identifiable because they are fitted
+##  with a lower bound of zero ...
+diag.element <- getME(Cand.models[[4]],"lower")==0
+any(theta[diag.element]<1e-5)
 
 newdata <- data.frame(sexCat = c(rep("Male",360), rep("Female",360)),
                       ageCat = rep(c(rep("HY",120), rep("SY",120), rep("ASY",120)),2),
@@ -469,7 +536,8 @@ predictions <- cbind(predictions, newdata)
 colnames(predictions) <- c("predicted","lower95CI","upper95CI","sex","age","date",
                            "bandNum")
 
-ggplot(predictions, aes(x = date, y = predicted, color = sex)) + geom_line() + facet_wrap(~age) + 
-  geom_line(aes(x = date, y = lower95CI, color = sex)) + geom_line(aes(x = date, y = upper95CI, color = sex))
+ggplot(predictions, aes(x = date, y = predicted, color = sex)) + geom_line(size = 1) + facet_wrap(~age) + 
+  geom_line(aes(x = date, y = lower95CI, color = sex), linetype = 2) + 
+  geom_line(aes(x = date, y = upper95CI, color = sex), linetype = 2)
 
 

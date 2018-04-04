@@ -1,8 +1,9 @@
 ---
-title: "Pattenrns of variation in blood mercury levels in <i>Catharus bicknelli</i> and <i>C</i>. <i>ustulatus</i> on Mount Mansfield, Vermont"
+title: "Patterns of variation in blood mercury levels in <i>Catharus bicknelli</i> and <i>C</i>. <i>ustulatus</i> on Mount Mansfield, Vermont"
 output: html_document
 bibliography: bibliography.bib
 csl: ecotoxicology.csl
+fig_caption: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -10,7 +11,6 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Methods
-
 We analyzed variation in blood mercury levels using mixed-effects models as implemented in R version 3.4.4 [@RCoreTeam2018] in the package <i>lme4</i>[@BatesEtAl2015], version 1.1-15. In brief, we used a model-selection approach [@Burnham2003] to identify the best-supported model from a candidate set of models that reflected alternative hypotheses about sources of variation in blood mercury among <i>Catharus</i> thrushes captured on Mount Mansfield, Vermont between 2000 and 2017. We used Akaike's Information Criteria, corrected for small-sample size (AICc), as the measure of support for each model. We used the number of unique individuals included in the analysis as the sample size for the purposes of calculating AICc. 
 
 Construction of the set of candidate models was informed by previous research on mercury loads in Bicknell's Thrush [@Rimmer2005,@Rimmer2010]. This work demonstrated consistent seasonal declines in mercury levels and inconsistent effects of age and sex; Rimmer et al. [-@Rimmer2005] found that males and older individuals had higher concentrations of mercury in their blood, whereas Rimmer et al. [-@Rimmer2010] found no effect of age or sex on blood-mercury concentration. Given the the apparent generality of the seasonal decline in concentrations of mercury on the blood, we included an effect of day-of-the-year in all models. Thus, the simplest model in our candidate set (excluding the intercept-only null model) included only an effect of sampling date. Rimmer et al. [-@Rimmer2010] suggested that mercury levels in Bicknell's Thrush declined more rapidly earlier in the year, so our next model included a quadratic effect of sampling date. To examine the possibility of age- and sex-related differences in blood-mercury concentrations, we added terms for sex and age (coded as hatch-year, second-year, or after-second-year) to the better-supported of the two date-only models. 
@@ -19,15 +19,18 @@ We next considered a model that allowed for variation in blood-mercury concentra
 
 For all of the above models, we included individual as a random effect to account for the repeated sampling of some individuals, both within and among years. We used the best-supported model to generate inference. We generated unconditional predictions from the best model and calculated confidence intervals around predictions using the bootstrap approach implemented in the 'bootMer' function of lme4 [@BatesEtAl2015].
 
+We analyzed temporal variation in mercury deposition using generalized additive models as implemented in the R package 'mgcv' version 1.8-23 [@wood2017generalized]. We were interested in examining seasonal and annual variation, so we considered only two models, one that included terms for year and day-of-the-year, and one that included these two main effects and their intereaction, allowing for the possibility that seasonal patterns of mercury depostion have varied over time. We compared the two models using AIC, and selected for inference the model with the lower value.
+
 ## Results
 ### Descriptive statistics
+#### Blood-mercury concentration in thrushes.
 ```{r, echo=FALSE, warning=FALSE,message=FALSE}
 library(dplyr)
 library(tidyr)
 library(knitr)
 colClassesThrush <- as.vector(c("factor","character","factor","factor","factor","numeric","factor",
                                 "factor","factor","numeric","numeric","factor","factor","factor",
-                                "factor","numeric","numeric","factor"))
+                                "factor","numeric","numeric","factor","numeric","numeric","character","numeric","numeric","numeric","numeric","factor","factor"))
 thrush.df <- read.csv("thrush.df.csv", colClasses = colClassesThrush)
 thrush.df$date <- as.Date(thrush.df$date, format = "%Y-%m-%e")
 table1 <- thrush.df %>%
@@ -76,17 +79,123 @@ kable(table3, digits = 3, caption = "Table 3. Male Bicknell's Thrush (BITH)
       sampled on Mount Mansfield, Vermont between 2000 and 2017 tended to have higher blood-mercury concentrations than females. Male and female Swainson's Thrush (SWTH) did not differ appreciably in blood-mercury concentration.")
 ```
 
+#### Variation in mercury deposition over time.
 
-```{r cars}
-summary(cars)
+```{r echo=FALSE, warning=FALSE,message=FALSE, results='hide'}
+library(mgcv)
+library(viridis)
+colClassesMercury <- as.vector(c("factor","Date","numeric","factor",
+                                 "numeric","numeric","numeric"))
+mercury.df <- read.csv("mercury.df.csv", colClasses = colClassesMercury)
+
+knots <- list(doy = c(0.5,366.5)) # set the endpoints of the annual cycle (with some leap years)
+
+gam.m1 <- bam(hgDepositionUGM2 ~ s(doy, k = 30, bs = "cc") + s(YEAR, k = 24) + 
+                ti(doy, YEAR, bs = c("cc","tp"), k = c(15,15)), data = mercury.df, 
+              method = "fREML", knots = knots, discrete = TRUE)
+summary(gam.m1)
+
+gam.m2 <- bam(hgDepositionUGM2 ~ s(doy, k = 30, bs = "cc") + s(YEAR, k = 24),
+              data = mercury.df, 
+              method = "fREML", knots = knots, discrete = TRUE)
+summary(gam.m2)
+AIC(gam.m1,gam.m2)
+```
+The generalized additive model that included an interaction between year and day-of-the year (gam.m1) had a lower AIC value than did the simpler model (gam.m2) without the interaction, so we used the more complicated model for inference. 
+
+```{r, echo=FALSE}
+AIC(gam.m1,gam.m2)
+```
+Day-of-the-year ("doy"), year(YEAR), and the interaction between the two were significant predictors of temporal variation in mercury deposition. 
+
+```{r, echo=FALSE,warning=FALSE,message=FALSE,error=FALSE, results ="asis"}
+library(itsadug)
+library(xtable)
+gamtabs(gam.m1, caption = "Summary of generalized additive model results.", type = "html")
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+Mercury deposition showed strong yearly and seasonal variation (Fig. 1). Mercury deposition rose from 1993 until 2004, declined from 2005-2010, and then rose sharply again (Fig. 1A). Within years, mercury deposition tended to be greatest during July and August (Fig. 1B).
+```{r figs, echo=FALSE,fig.width=7,fig.height=6,fig.cap="Figure 1. Mercury deposition on Mount Mansfield, Vermont increased from 1993 - 2017 (A) and showed strong seasonal variation (B), with depostion peacking in mid-July. Lines show expected values based on the best-supported generalized additive model, and shaded areas show 95% confidence intervals."}
+par(mfrow = c(1,2), mgp = c(1.5,0.5,0))
+plot(gam.m1, select = 2, shade = T, shift = 0.100684, xlab = "Year", 
+     ylab = expression("Expected mercury concentration" ~ (mu ~ grams ~ m^{-2})))
+text(2015,0.18,"A")
+plot(gam.m1, rug = F, select = 1, shade = T, shift = 0.100684, xlab = "Day of the year", 
+     ylab = expression("Expected mercury concentration" ~ (mu ~ grams ~ m^{-2})))
+text(358,0.18,"B")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r, echo = FALSE, fig.width=7,fig.height=6,fig.cap="Figure 2. Periods of peak mercury deposition on Mount Mansfield, Vermont have increased from 1993 - 2017 and have become become more strongly seasonal.Whiter areas indicate periods of higher deposition; greener areas show periods of lower deposition. Red lines show the expected concentration of mercury deposition."}
+vis.gam(gam.m1,plot.type="contour",color="terrain", main="", xlab = "Day of the year",
+        ylab = "Year")
+```
+## Formal analysis of variation in blood-mercury concentration.
+
+The best-supported model (i.e., with the lowest AICc) in the candidate set included an effect of sampling date, age, and sex of the individual. The data did not support an effect of species (i.e., blood-mercury concentrations are similar in Bicknell's Thrush and Swainson's Thrush)(delta AIC = 2.02). We found no evidence, either, for any temporal trend in blood-mercury concentration; the model with a term for "year" had only a slightly higher log-likelihood (LL). Finally, none of the models that included an effect of atmospheric deposition rate (6-month dep, 1-year dep, 2-year dep, or 3-year dep) performed substantially better than the simpler model.
+```{r, echo = FALSE, message=FALSE,warning=FALSE,error=FALSE, results = "hide"}
+library(MuMIn)
+library(lme4)
+library(AICcmodavg)
+library(MASS)
+
+## We can also approach this from a model selection standpoint.
+### Two previous papers (Rimmer et al. 2005, 2009) show a seasonal decline in blood mercury levels.
+### One paper (Rimmer et al. 2005) also shows an effect of age (older birds have higher burdens) and
+### sex (males have higher burdens then females), whereas the other (Rimmer et al. 2009) does not. 
+### This suggests the best starting model is a model with an effect of date.
+### The next model would include age + sex, to determine whether adding these variables provides a better fit.
+### Of these two models, add the effect of species to see whether differences exist between BITH + SWTH.
+### Next, consider the possibility of temporal trends by adding a year effect to the best model.
+### Finally, ask whether any measure of atmospheric deposition improves model performance.
+Cand.models <- list()
+#Null
+Cand.models[[1]]<- lmer(hgLevel ~ 1 + (1|bandNum), REML = FALSE, data = thrush.df)
+summary(Cand.models[[1]])
+Cand.models[[2]]<- lmer(hgLevel ~ jdate + (1|bandNum), REML = FALSE, data = thrush.df)
+summary(Cand.models[[2]])
+Cand.models[[3]]<- lmer(hgLevel ~ jdate + I(jdate^2) + (1|bandNum), REML = FALSE, data = thrush.df)
+summary(Cand.models[[3]])
+aictab(cand.set = Cand.models, modnames = c("Null","Date", "Quadratic date"), sort = TRUE, nobs = 235)
+
+# We prefer a quadratic effect of date
+Cand.models[[4]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + (1|bandNum), REML = FALSE, data = thrush.df)
+summary(Cand.models[[4]])
+aictab(cand.set = Cand.models, modnames = c("Null","Date", "Quadratic date", "Date+age+sex"), sort = TRUE, nobs = 235)
+
+# We prefer adding effect of age and sex.
+
+Cand.models[[5]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + species + (1|bandNum), REML = FALSE, data = thrush.df)
+summary(Cand.models[[5]])
+aictab(cand.set = Cand.models, modnames = c("Null","Date", "Quadratic date", "Date+age+sex", "Date+age+sex+species"), sort = TRUE, nobs = 235)
+
+# Species is not a useful predictor.
+
+Cand.models[[6]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + year + (1|bandNum), REML = FALSE, data = thrush.df)
+summary(Cand.models[[6]])
+aictab(cand.set = Cand.models, modnames = c("Null","Date", "Quadratic date",
+                                            "Date+age+sex", "Date+age+sex+species",
+                                            "Date+age+sex+year"), sort = TRUE, nobs = 235)
+
+# Yearly trends are not evident.
+Cand.models[[7]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + hgDep6MO + (1|bandNum), REML = FALSE, data = thrush.df)
+summary(Cand.models[[7]])
+Cand.models[[8]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + hgDep1Yr + (1|bandNum), REML = FALSE, data = thrush.df)
+summary(Cand.models[[8]])
+Cand.models[[9]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + hgDep2Yr + (1|bandNum), REML = FALSE, data = thrush.df)
+summary(Cand.models[[9]])
+Cand.models[[10]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + hgDep3Yr + (1|bandNum), REML = FALSE, data = thrush.df)
+summary(Cand.models[[10]])
+
+# Deposition effects are not important.
+
+Modnames <- c("Null","Date", "Quadratic date",
+              "Date+age+sex", "Date+age+sex+species",
+              "Date+age+sex+year", "Date+age+sex+6-month dep",
+              "Date+age+sex+1-year dep", "Date+age+sex+2-year dep",
+              "Date+age+sex+3-year dep")
+```
+
+```{r, echo=FALSE}
+aictab(cand.set = Cand.models, modnames = Modnames, sort = TRUE, nobs = 235)
+```
+

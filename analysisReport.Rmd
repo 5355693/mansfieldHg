@@ -101,17 +101,19 @@ gam.m2 <- bam(hgDepositionUGM2 ~ s(doy, k = 30, bs = "cc") + s(YEAR, k = 24),
 summary(gam.m2)
 AIC(gam.m1,gam.m2)
 ```
-The generalized additive model that included an interaction between year and day-of-the year (gam.m1) had a lower AIC value than did the simpler model (gam.m2) without the interaction, so we used the more complicated model for inference. 
+The model that included an interaction between year and day-of-the year (gam.m1) had a lower AIC value than did the simpler model (gam.m2) without the interaction, so we used the more complicated model for inference. 
 
 ```{r, echo=FALSE}
-AIC(gam.m1,gam.m2)
+library(kableExtra)
+kable(AIC(gam.m1,gam.m2), "html", caption = "Table 4. AICc model comparison supports a generalized additive model that includes effects of day of the year, year, and their interaction.") %>% kable_styling(bootstrap_options = "striped", full_width = F)
 ```
-Day-of-the-year ("doy"), year(YEAR), and the interaction between the two were significant predictors of temporal variation in mercury deposition. 
+
 
 ```{r, echo=FALSE,warning=FALSE,message=FALSE,error=FALSE, results ="asis"}
 library(itsadug)
 library(xtable)
-gamtabs(gam.m1, caption = "Summary of generalized additive model results.", type = "html")
+gamtabs(gam.m1, caption = "Table 5. Summary results of the best-supported generalized additive model show significant seasonal and yearly variation in mercury deposition on Mount Mansfield, Vermont.", 
+        snames = c("Day of the year", "Year", "Day of the year * Year"), type = "html")
 ```
 
 Mercury deposition showed strong yearly and seasonal variation (Fig. 1). Mercury deposition rose from 1993 until 2004, declined from 2005-2010, and then rose sharply again (Fig. 1A). Within years, mercury deposition tended to be greatest during July and August (Fig. 1B).
@@ -196,6 +198,76 @@ Modnames <- c("Null","Date", "Quadratic date",
 ```
 
 ```{r, echo=FALSE}
-aictab(cand.set = Cand.models, modnames = Modnames, sort = TRUE, nobs = 235)
+kable((aictab(cand.set = Cand.models, modnames = Modnames, sort = TRUE, nobs = 235)), "html", caption = "Table 6. Relative support for candidate models explaining variation in blood-mercury concentration in Bicknell's Thrush and Swainson's Thrush on Mount Mansfield, Vermont.", col.names = c("Model", "No. parameters", "AICc", "Delta AICc", "Model likelihood", "AICc weight", "Log likelihood","Cumulative model weight"))%>% kable_styling(bootstrap_options = "striped", full_width = F) %>% footnote(general = "Date refers to day of the year on which the blood sample was drawn. Age is the age of the bird: hatch-year, second-year, or after-second-year. Sex is male, female, or unknown. 6-month dep is the average mercury deposition at the Underhill station during the December - June preceding the blood sample. 1-, 2-, and 3-year dep, respectively, is the average mercury deposition at the Underhill station during the previous 1, 2, or 3 years (June - June).")
 ```
 
+
+Examining the output of the best-supported model ('Date+age+sex'), we see that date has the strongest correlation with blood-mercury concentration; the effects of age and sex are substantially weaker. 
+```{r, echo = FALSE, warning=FALSE,error=FALSE, message=FALSE}
+library(lmerTest)
+best.mod <- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + (1|bandNum), REML = FALSE, data = thrush.df)
+kable(anova(best.mod),"html",digits = 4)%>%kable_styling(bootstrap_options = "striped", full_width = F)%>% footnote(general = "'jdate' refers to day of the year on which the blood sample was drawn. I(date^2) is the quadratic effect of day of the year. 'ageCat' is the age of the bird: hatch-year, second-year, or after-second-year. 'sexCat' is male, female, or unknown.")
+```
+
+Overall, the fixed-effects in the model (date, age, and sex; R2m) explain ~38% of the variation in blood-mercury levels. The fixed- and random-effects together (R2c) explain ~65% of the variation. This suggests substantial amounts of individual variation in blood-mercury concentration that are not explained by any of the factors considered in this analysis. This could be due to individual differences in ability to offload mercury or individual differences in exposure at any point during their life cycle. 
+```{r, echo = FALSE, warning=FALSE,error=FALSE, message=FALSE}
+library(MuMIn)
+kable(r.squaredGLMM(Cand.models[[4]]), "html", col.names = "R-squared")%>%kable_styling(bootstrap_options = "striped", full_width = F)
+```
+
+```{r, echo = F, message=FALSE,error=FALSE,warning=FALSE, results = 'hide'}
+newdata <- data.frame(sexCat = c(rep("Male",360), rep("Female",360)),
+                      ageCat = rep(c(rep("HY",120), rep("SY",120), rep("ASY",120)),2),
+                      jdate = rep(seq(min(thrush.df$jdate), max(thrush.df$jdate),1),6),
+                      bandNum = "999")
+
+predictions <- as.data.frame(predict(Cand.models[[4]], newdata = newdata, re.form = ~(1|bandNum), 
+        allow.new.levels = TRUE))
+# No standard errors are provided with the "predict" function.
+# 
+bootCI <- function(model) {
+  predict(model, newdata = newdata, re.form = ~(1|bandNum), 
+          allow.new.levels = TRUE)
+}
+bootCI(Cand.models[[4]])  
+
+CI <- bootMer(Cand.models[[4]], bootCI, nsim = 1000)
+head(CI) 
+
+predCL <- t(apply(CI$t, MARGIN = 2, FUN = quantile, probs = c(0.025, 0.975)))
+
+predictions$lci <- predCL[, 1]
+predictions$uci <- predCL[, 2]
+
+predictions <- cbind(predictions, newdata)
+
+
+colnames(predictions) <- c("predicted","lower95CI","upper95CI","sex","age","date",
+                           "bandNum")
+predictions$age <- factor(predictions$age, levels = c("HY","SY", "ASY"))
+colnames(predictions)[4] <- "Sex"
+
+
+```
+As indicated by the model results, males tend to have higher mercury levels than females, and older birds tend to have higher mercury levels than younger birds. However, broad overlap exists among all demographic groups (Figs. 3, 4).
+
+```{r, echo = FALSE, message = FALSE, error = FALSE, warning = FALSE, fig.width=7,fig.height=6,fig.cap="Figure 3. Male Bicknell's Thrush and Swainson's Thrush tended to have higher predicted concentrations of mercury in the blood than did females. However, 95% confidence intervals (the red and blue filled areas) overlapped extensively. Lighter blue portions of the figure show concentrations predicted only for males, darker blue portions show concentrations predicted for both sexes, and red-shaded areas show predicted concentrations expected only for females. Panels show, respectively, predicted values for hatch-year (HY), second-year (SY), and after-second-year (ASY) individuals."}
+library(ggplot2)
+ggplot(predictions, aes(x = date, y = predicted, color = Sex, fill = Sex)) + geom_ribbon(aes(ymin = lower95CI,
+                                                                             ymax = upper95CI, linetype = NA),
+                                                                             alpha = 0.6) + 
+  facet_wrap(~age) + ylab("Predicted blood-mercury concentration") + xlab("Date")
+
+```
+
+
+```{r, echo = FALSE, message = FALSE, error = FALSE, warning = FALSE, fig.width=7,fig.height=6,fig.cap="Figure 4. Older Bicknell's Thrush and Swainson's Thrush tended to have higher predicted concentrations of mercury in the blood than did younger birds. However, 95% confidence intervals overlapped extensively. Purple portions of the figure show concentrations predicted only for ASY individuals, light blue portions show concentrations predicted for ASY and SY individuals, dark blue areas show concentrations expected of birds of any age, light green portions show concentrations expected for SY individuals, olive portions show concentrations expected for SY and HY individuals, and red-shaded areas show predicted concentrations expected only for HY individuals. Panels show, respectively, predicted values for females and males."}
+colnames(predictions)[5] <- "Age"
+
+ggplot(predictions, aes(x = date, y = predicted, color = Age, fill = Age)) + geom_ribbon(aes(ymin = lower95CI,
+                                                                                             ymax = upper95CI, linetype = NA),
+                                                                                         alpha = 0.6) + 
+  facet_wrap(~Sex) + ylab("Predicted blood-mercury concentration") + xlab("Date")
+```
+
+## References

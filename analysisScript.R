@@ -308,7 +308,7 @@ thrush.df %>%
   filter(species == "BITH") %>%
   ggplot(., aes(x = hgDep2Yr, y = hgLevel)) + geom_smooth() + geom_point(alpha = 0.25) + 
   xlab("Mercury deposition") + ylab("Mercury level") + 
-  ggtitle("Correlation between Bicknell's Thrush mercury levels\nand mercury deposition during the past year")
+  ggtitle("Correlation between Bicknell's Thrush mercury levels\nand mercury deposition during the past 2 years")
 cor(thrush.df$hgLevel, thrush.df$hgDep2Yr) # r = -0.08
 
 
@@ -316,9 +316,12 @@ thrush.df %>%
   filter(species == "BITH") %>%
   ggplot(., aes(x = hgDep3Yr, y = hgLevel)) + geom_smooth() + geom_point(alpha = 0.25) + 
   xlab("Mercury deposition") + ylab("Mercury level") + 
-  ggtitle("Correlation between Bicknell's Thrush mercury levels\nand mercury deposition during the past year")
+  ggtitle("Correlation between Bicknell's Thrush mercury levels\nand mercury deposition during the past 3 years")
 cor(thrush.df$hgLevel, thrush.df$hgDep3Yr) # r = -0.05
 
+thrush.df %>%
+  filter(ageCat == "ASY") %>%
+  ggplot(., aes(x = as.factor(year), y = hgLevel)) + geom_boxplot() + coord_trans(y = "sqrt")
 # Models.
 ## response variable = hgLevels.
 ## fixed effects: species, year, day-of-year, sex, hgDep1Yr, hgDep6mo
@@ -507,6 +510,7 @@ theta <- getME(Cand.models[[4]],"theta")
 diag.element <- getME(Cand.models[[4]],"lower")==0
 any(theta[diag.element]<1e-5)
 
+
 newdata <- data.frame(sexCat = c(rep("Male",360), rep("Female",360)),
                       ageCat = rep(c(rep("HY",120), rep("SY",120), rep("ASY",120)),2),
                       jdate = rep(seq(min(thrush.df$jdate), max(thrush.df$jdate),1),6),
@@ -535,9 +539,17 @@ predictions <- cbind(predictions, newdata)
 
 colnames(predictions) <- c("predicted","lower95CI","upper95CI","sex","age","date",
                            "bandNum")
+predictions$age <- factor(predictions$age, levels = c("HY","SY", "ASY"))
+colnames(predictions)[4] <- "Sex"
 
-ggplot(predictions, aes(x = date, y = predicted, color = sex)) + geom_line(size = 1) + facet_wrap(~age) + 
-  geom_line(aes(x = date, y = lower95CI, color = sex), linetype = 2) + 
-  geom_line(aes(x = date, y = upper95CI, color = sex), linetype = 2)
+ggplot(predictions, aes(x = date, y = predicted, color = Sex, fill = Sex)) + geom_ribbon(aes(ymin = lower95CI,
+                                                                             ymax = upper95CI, linetype = NA),
+                                                                             alpha = 0.6) + 
+  facet_wrap(~age) + ylab("Predicted blood-mercury concentration") + xlab("Date")
 
+colnames(predictions)[5] <- "Age"
 
+ggplot(predictions, aes(x = date, y = predicted, color = Age, fill = Age)) + geom_ribbon(aes(ymin = lower95CI,
+                                                                                             ymax = upper95CI, linetype = NA),
+                                                                                         alpha = 0.6) + 
+  facet_wrap(~Sex) + ylab("Predicted blood-mercury concentration") + xlab("Date")

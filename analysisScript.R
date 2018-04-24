@@ -282,6 +282,18 @@ thrush.df %>%
   ggplot(., aes(x = yday(date), y = hgLevel)) + geom_smooth() + geom_point(alpha = 0.25) + 
   xlab("Day of the year") + ylab("Mercury level") + ggtitle("Bicknell's Thrush mercury levels decrease\nover the year")
 
+thrush.df %>%
+  group_by(bandNum) %>%
+  filter(n()>1) %>%
+  ggplot(., aes(x = yday(date), y = hgLevel)) + geom_line() + geom_point() + 
+  facet_wrap(~bandNum) + theme(legend.position="none")
+
+thrush.df %>%
+  group_by(bandNum) %>%
+  filter(n()>1) %>%
+  ggplot(., aes(x = yday(date), y = hgLevel, color = bandNum)) + geom_smooth(method = "lm", se = FALSE) + 
+  theme(legend.position="none")
+
 ## And SWTH:
 thrush.df %>%
   filter(species == "SWTH") %>%
@@ -322,88 +334,14 @@ cor(thrush.df$hgLevel, thrush.df$hgDep3Yr) # r = -0.05
 thrush.df %>%
   filter(ageCat == "ASY") %>%
   ggplot(., aes(x = as.factor(year), y = hgLevel)) + geom_boxplot() + coord_trans(y = "sqrt")
+
+# Do levels change over time?
+thrush.df %>%
+  ggplot(., aes(y = hgLevel, x = as.factor(year))) + geom_boxplot() + ylab("Blood-mercury concentration in thrushes")
 # Models.
 ## response variable = hgLevels.
 ## fixed effects: species, year, day-of-year, sex, hgDep1Yr, hgDep6mo
 ## random effects: individual (bandNum)
-
-### Using the Lasso approach seems favored when considering variable selection.
-#### 
-#library(glmmLasso)
-# scale and center all metric variables so that the starting values with glmmPQL are correct
-thrush.df$yearSc <- scale(thrush.df$year, center = T, scale = T)
-thrush.df$jdateSc <- scale(thrush.df$jdate, center = T, scale = T)
-thrush.df$hgDep1YrSc <- scale(thrush.df$hgDep1Yr, center = T, scale = T)
-thrush.df$hgDep6MOSc <- scale(thrush.df$hgDep6MO, center = T, scale = T)
-
-# Scaled variables have to be cut out for ggplot to work:
-#thrush.df <- thrush.df[,-c(24:27)]
-
-lambda <- seq(500,0,by=-5)
-library(MASS)
-library(nlme)
-PQL <- glmmPQL(hgLevel~1, random = ~1|bandNum, family = gaussian, data = thrush.df)
-Delta.start <- c(as.numeric(PQL$coef$fixed, rep(0,6), as.numeric(t(PQL$coef$random$bandNum))))
-Q.start <- as.numeric(VarCorr(PQL)[1,1])
-
-################## More Elegant Method ############################################
-## Idea: start with big lambda and use the estimates of the previous fit (BUT: before
-## the final re-estimation Fisher scoring is performed!) as starting values for the next fit;
-## make sure, that your lambda sequence starts at a value big enough such that all covariates are
-## shrinked to zero;
-
-## Using BIC (or AIC, respectively) to determine the optimal tuning parameter lambda
-lambda <- seq(100,0,by=-1)
-
-
-BIC_vec<-rep(Inf,length(lambda))
-family = gaussian(link = identity)
-
-# specify starting values for the very first fit; pay attention that Delta.start has suitable length! 
-Delta.start<-as.matrix(t(rep(0,249)))
-Q.start<-0.1  
-
-for(j in 1:length(lambda))
-{
-  print(paste("Iteration ", j,sep=""))
-  
-  glmm.test <- glmmLasso(hgLevel~1 +jdate
-                    + year
-                    + hgDep1Yr
-                    + hgDep6MO
-                    + hgDep2Yr
-                    + hgDep3Yr
-                    + as.factor(species)
-                    + as.factor(age)
-                    + as.factor(sex)
-                    ,rnd = list(bandNum=~1),  
-                    family = family, data = thrush.df, 
-                    lambda=lambda[j], switch.NR=F,final.re=TRUE,
-                    control = list(start=Delta.start[j,],q_start=Q.start[j]))  
-  
-  print(colnames(glmm.test$Deltamatrix)[2:7][glmm.test$Deltamatrix[glmm.test$conv.step,2:7]!=0])
-  BIC_vec[j]<-glmm.test$bic
-  Delta.start<-rbind(Delta.start,glmm.test$Deltamatrix[glmm.test$conv.step,])
-  Q.start<-c(Q.start,glmm.test$Q_long[[glmm.test$conv.step+1]])
-}
-
-opt<-which.min(BIC_vec)
-
-glmm.final <- glmmLasso(hgLevel ~ jdate + year + hgDep6MO +
-                          hgDep1Yr + hgDep2Yr + hgDep3Yr + as.factor(species) + 
-                          as.factor(age) + as.factor(sex), rnd = list(bandNum=~1),  
-                        family = family, data = thrush.df, lambda=lambda[opt],
-                        switch.NR=F,final.re=TRUE,
-                        control = list(start=Delta.start[opt,],q_start=Q.start[opt]))  
-
-glmm.final <- glmmLasso(hgLevel ~ jdate + year + hgDep6MO +
-                          hgDep1Yr + hgDep2Yr + hgDep3Yr + as.factor(species) + 
-                          as.factor(age) + as.factor(sex), rnd = list(bandNum=~1),  
-                        family = family, data = thrush.df, lambda=0,
-                        switch.NR=F,final.re=TRUE,
-                        control = list(start=Delta.start[opt,],q_start=Q.start[opt]))  
-
-summary(glmm.final)
 
 library(MuMIn)
 library(lme4)
@@ -477,6 +415,8 @@ plot(Cand.models[[4]], bandNum ~ resid(.), abline = 0)
 ##useful, for example, for detecting nonlinearity. 
 plot(Cand.models[[4]], resid(., type = "working") ~ fitted(.)|bandNum, abline = 0)
 
+# Can see the lack of a year effect clearly here:
+boxplot((resid(Cand.models[[4]])) ~ thrush.df$year, xlab = "Year", ylab = "Residual blood mercury concentration")
 
 ##Normality of errors: symmetrical around zero, with heavier tails.
 ##Heavier tails tend to inflate estimate of within-group error,leading to 

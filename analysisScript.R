@@ -1,6 +1,7 @@
 library(lubridate)
 library(tidyr)
 library(dplyr)
+library(ggplot2)
 if (Sys.info()['sysname'] == 'Darwin') {
   libjvm <- paste0(system2('/usr/libexec/java_home',stdout = TRUE)[1],'/jre/lib/server/libjvm.dylib')
   message (paste0('Load libjvm.dylib from: ',libjvm))
@@ -208,6 +209,7 @@ ggplot(mercury.df, aes(x = doy, y = predicted)) + geom_line() +
 
 #GAM plots, with values shifted by the value of the intercept to make
 #the y-axis more interpretable.
+png("Fig2.png", width = 6, height = 6, units = 'in', res = 300)
 par(mfrow = c(1,2), mgp = c(1.5,0.5,0))
 plot(gam.m1, select = 2, shade = T, shift = 0.100684, xlab = "Year", 
      ylab = expression("Expected mercury concentration" ~ (mu ~ grams ~ m^{-2})))
@@ -215,10 +217,12 @@ text(2015,0.18,"A")
 plot(gam.m1, rug = F, select = 1, shade = T, shift = 0.100684, xlab = "Day of the year", 
      ylab = expression("Expected mercury concentration" ~ (mu ~ grams ~ m^{-2})))
 text(358,0.18,"B")
+dev.off()
 
 vis.gam(gam.m1,plot.type="contour",color="terrain", main="", xlab = "Day of the year",
         ylab = "Year")
 
+plot(mercury.df$doy,log(mercury.df$hgDepositionUGM2+0.001))
 ## Sample sizes over time:
 thrush.df %>%
   group_by(year, species)%>%
@@ -416,7 +420,10 @@ plot(Cand.models[[4]], bandNum ~ resid(.), abline = 0)
 plot(Cand.models[[4]], resid(., type = "working") ~ fitted(.)|bandNum, abline = 0)
 
 # Can see the lack of a year effect clearly here:
+png("Fig1.png", width = 4, height = 4, units = 'in', res = 300)
 boxplot((resid(Cand.models[[4]])) ~ thrush.df$year, xlab = "Year", ylab = "Residual blood mercury concentration")
+dev.off()
+
 
 ##Normality of errors: symmetrical around zero, with heavier tails.
 ##Heavier tails tend to inflate estimate of within-group error,leading to 
@@ -484,8 +491,8 @@ colnames(predictions)[4] <- "Sex"
 
 ggplot(predictions, aes(x = date, y = predicted, color = Sex, fill = Sex)) + geom_ribbon(aes(ymin = lower95CI,
                                                                              ymax = upper95CI, linetype = NA),
-                                                                             alpha = 0.6) + 
-  facet_wrap(~age) + ylab("Predicted blood-mercury concentration") + xlab("Date")
+                                                                             alpha = 0.6) + geom_line() + 
+  facet_wrap(~Age) + ylab("Predicted blood-mercury concentration") + xlab("Date")
 
 colnames(predictions)[5] <- "Age"
 
@@ -493,3 +500,11 @@ ggplot(predictions, aes(x = date, y = predicted, color = Age, fill = Age)) + geo
                                                                                              ymax = upper95CI, linetype = NA),
                                                                                          alpha = 0.6) + 
   facet_wrap(~Sex) + ylab("Predicted blood-mercury concentration") + xlab("Date")
+
+png("Fig3.png", width = 4, height = 4, units = 'in', res = 300)
+p <- ggplot(predictions, aes(x = date, y = predicted))
+p + stat_summary(fun.data = "mean_cl_normal", fill = "gray", geom = "ribbon") + stat_summary(fun.y = "mean", geom = "line") + 
+  theme_classic() + ylab(expression(paste("Expected mercury concentration"," ","(", mu,"g","/", g,")"))) + 
+  xlab("Julian date")
+dev.off()
+                                                                              

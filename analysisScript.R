@@ -503,8 +503,21 @@ ggplot(predictions, aes(x = date, y = predicted, color = Age, fill = Age)) + geo
 
 png("Fig3.png", width = 4, height = 4, units = 'in', res = 300)
 p <- ggplot(predictions, aes(x = date, y = predicted))
-p + stat_summary(fun.data = "mean_cl_normal", fill = "gray", geom = "ribbon") + stat_summary(fun.y = "mean", geom = "line") + 
+q <- p + stat_summary(fun.data = "mean_cl_normal", fill = "gray", geom = "ribbon") + stat_summary(fun.y = "mean", geom = "line") + 
   theme_classic() + ylab(expression(paste("Expected mercury concentration"," ","(", mu,"g","/", g,")"))) + 
   xlab("Julian date")
+q + geom_point(data = thrush.df, aes(x = jdate, y = hgLevel, fill = "none"))
 dev.off()
-                                                                              
+
+## Sample sizes for paper:
+thrush.df %>%
+  group_by(species, sex, age) %>%
+  summarize(n = n())
+
+install.packages("multcomp")
+library(multcomp)  
+contr <- rbind("Female - Unknown" = c(1,0,-1),
+               "Male - Unknown" = c(0,1,-1))
+age.contr <- glht(Cand.models[[4]],linfct = mcp(ageCat = contr), alternative = "two.sided")
+summary(age.contr)
+confint(age.contr)                                                                              

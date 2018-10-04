@@ -421,9 +421,27 @@ plot(Cand.models[[4]], resid(., type = "working") ~ fitted(.)|bandNum, abline = 
 
 # Can see the lack of a year effect clearly here:
 png("Fig1.png", width = 4, height = 4, units = 'in', res = 300)
-boxplot((resid(Cand.models[[4]])) ~ thrush.df$year, xlab = "Year", ylab = "Residual blood mercury concentration")
+boxplot((resid(Cand.models[[4]])) ~ thrush.df$year, xlab = "Year", ylab = "Residual blood mercury concentration", ylim=c(-0.1,0.15))
+text(x= 1, y= 0.12, labels= "23")
+text(x= 2, y= 0.06, labels= "24")
+text(x= 3, y= 0.05, labels= "6")
+text(x= 4, y= 0.05, labels= "10")
+text(x= 5, y= 0.07, labels= "7")
+text(x= 6, y= 0.07, labels= "21")
+text(x= 7, y= 0.08, labels= "14")
+text(x= 8, y= 0.07, labels= "42")
+text(x= 9, y= 0.09, labels= "80")
+text(x= 10, y= 0.1, labels= "91")
+text(x= 11, y= 0.13, labels= "42")
 dev.off()
+summary(as.factor(thrush.df$year))
 
+#Or:
+thrush.df$mod4Resids <- resid(Cand.models[[4]])
+p <- ggplot(thrush.df, aes(as.factor(year), mod4Resids))
+png("Fig1.png", width = 6, height = 4, units = 'in', res = 300)
+p + geom_violin() + geom_jitter(width = 0.2) + xlab("Year") + ylab("Residual blood mercury concentration")
+dev.off()
 
 ##Normality of errors: symmetrical around zero, with heavier tails.
 ##Heavier tails tend to inflate estimate of within-group error,leading to 
@@ -520,4 +538,65 @@ contr <- rbind("Female - Unknown" = c(1,0,-1),
                "Male - Unknown" = c(0,1,-1))
 age.contr <- glht(Cand.models[[4]],linfct = mcp(ageCat = contr), alternative = "two.sided")
 summary(age.contr)
-confint(age.contr)                                                                              
+confint(age.contr)     
+
+## A reviewer asked whether we might see a correlation between deposition and blood-mercury in thrushes if we looked only at samples drawn after July 1.
+thrush.postJuly.df <-
+  thrush.df %>%
+  filter(jdate > 190)
+
+Cand.models.REV <- list()
+
+#Null
+Cand.models.REV[[1]]<- lmer(hgLevel ~ 1 + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+summary(Cand.models.REV[[1]])
+Cand.models.REV[[2]]<- lmer(hgLevel ~ jdate + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+summary(Cand.models.REV[[2]])
+Cand.models.REV[[3]]<- lmer(hgLevel ~ jdate + I(jdate^2) + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+summary(Cand.models.REV[[3]])
+aictab(cand.set = Cand.models.REV, modnames = c("Null","Date", "Quadratic date"), sort = TRUE, nobs = 235)
+
+# We prefer a quadratic effect of date
+Cand.models.REV[[4]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+summary(Cand.models.REV[[4]])
+aictab(cand.set = Cand.models.REV, modnames = c("Null","Date", "Quadratic date", "Date+age+sex"), sort = TRUE, nobs = 235)
+
+# We prefer adding effect of age and sex.
+
+Cand.models.REV[[5]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + species + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+summary(Cand.models.REV[[5]])
+aictab(cand.set = Cand.models.REV, modnames = c("Null","Date", "Quadratic date", "Date+age+sex", "Date+age+sex+species"), sort = TRUE, nobs = 235)
+
+# Species is not a useful predictor.
+
+Cand.models.REV[[6]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + year + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+summary(Cand.models.REV[[6]])
+aictab(cand.set = Cand.models.REV, modnames = c("Null","Date", "Quadratic date",
+                                            "Date+age+sex", "Date+age+sex+species",
+                                            "Date+age+sex+year"), sort = TRUE, nobs = 235)
+
+# Yearly trends are not evident.
+Cand.models.REV[[7]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + hgDep6MO + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+summary(Cand.models.REV[[7]])
+Cand.models.REV[[8]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + hgDep1Yr + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+summary(Cand.models.REV[[8]])
+Cand.models.REV[[9]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + hgDep2Yr + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+summary(Cand.models.REV[[9]])
+Cand.models.REV[[10]]<- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + hgDep3Yr + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+summary(Cand.models.REV[[10]])
+
+# Deposition effects are not important.
+
+Modnames.REV <- c("Null","Date", "Quadratic date",
+              "Date+age+sex", "Date+age+sex+species",
+              "Date+age+sex+year", "Date+age+sex+6-month dep",
+              "Date+age+sex+1-year dep", "Date+age+sex+2-year dep",
+              "Date+age+sex+3-year dep")
+aictab(cand.set = Cand.models.REV, modnames = Modnames.REV, sort = TRUE, nobs = 235)
+
+## Parameter estimates from the best model with a deposition effect:
+confint(Cand.models.REV[[8]], level = 0.95, method = "profile")
+library(lmerTest)
+best.mod <- lmer(hgLevel ~ jdate + I(jdate^2) + ageCat + sexCat + hgDep1Yr + (1|bandNum), REML = FALSE, data = thrush.postJuly.df)
+anova(best.mod)
+summary(best.mod)
